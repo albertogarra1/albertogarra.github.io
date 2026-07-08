@@ -1,0 +1,1673 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>DESA Simulador · AlbertoGarra Health Solutions</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#08120C">
+<meta name="background-color" content="#08120C">
+<meta name="description" content="Simulador interactivo de DESA para prácticas de RCP y desfibrilación.">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DESA Simulador">
+<style>
+:root{
+  --housing:#E7E7E3;
+  --housing-light:#FFFFFF;
+  --housing-dark:#C7C7C1;
+  --housing-shadow:#AFAFA8;
+  --panel:#201E1B;
+  --panel-light:#38352F;
+  --lcd-bg:#08120C;
+  --lcd-bg2:#0C1B12;
+  --phosphor:#79FF9B;
+  --phosphor-dim:#2E7A49;
+  --amber:#FFC300;
+  --amber-dim:#7A5E00;
+  --red:#E4312B;
+  --red-dim:#5C1512;
+  --green:#3DDC63;
+  --green-dim:#1B5C2C;
+  --steel:#5A564E;
+  --cream:#F2ECDC;
+  --ink:#3B3B38;
+  --ui-font: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --dev-font: "Arial Narrow","Helvetica Neue Condensed",Arial,sans-serif;
+  --lcd-font: "Consolas","Courier New",monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{
+  margin:0;padding:0;width:100%;height:100%;
+  overflow:hidden;
+  background:#d7d7d3;
+  font-family:var(--ui-font);
+  user-select:none;-webkit-user-select:none;
+  touch-action:manipulation;
+}
+#app{
+  position:fixed;inset:0;
+  display:flex;flex-direction:column;
+  background:
+    radial-gradient(ellipse at 30% 0%, var(--housing-light) 0%, var(--housing) 55%, var(--housing-dark) 100%);
+  padding:clamp(8px,1.3vh,18px) clamp(12px,2.2vw,32px);
+  gap:clamp(5px,1vh,12px);
+}
+
+/* ---------- barra superior ---------- */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  flex:0 0 auto;
+}
+.topbar-left{
+  display:flex;align-items:center;gap:clamp(10px,1.8vw,16px);
+}
+.brand{
+  display:flex;flex-direction:column;line-height:1.05;
+  color:var(--ink);
+  text-shadow:0 1px 0 rgba(255,255,255,.6);
+}
+.brand b{font-size:clamp(11px,1.5vh,15px);letter-spacing:.06em;font-family:var(--dev-font);font-weight:800;}
+.brand span{font-size:clamp(8px,1vh,10px);letter-spacing:.14em;text-transform:uppercase;opacity:.85;}
+.corner-controls{display:flex;gap:8px;}
+.fab{
+  width:clamp(34px,4.6vh,46px);height:clamp(34px,4.6vh,46px);
+  border-radius:50%;
+  border:1px solid rgba(0,0,0,.35);
+  background:rgba(0,0,0,.28);
+  color:var(--cream);
+  display:flex;align-items:center;justify-content:center;
+  font-size:clamp(15px,2vh,19px);
+  cursor:pointer;
+  backdrop-filter:blur(2px);
+}
+.fab:active{background:rgba(0,0,0,.45);}
+
+/* ---------- clavija/conector de electrodos (elemento físico de la carcasa) ---------- */
+.pad-connector{
+  border:none;background:transparent;padding:2px;margin:0;
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:8px;
+  -webkit-tap-highlight-color:transparent;
+}
+.pad-connector:active{transform:translateY(1px);}
+.pad-connector svg{
+  width:clamp(102px,16.5vh,140px);height:auto;display:block;
+  transition:filter .15s;
+}
+.pad-connector .jack-body{fill:#17140f;stroke:#050402;stroke-width:1.4;transition:fill .2s;}
+.pad-connector .jack-slot{fill:#3d3a33;transition:fill .15s, filter .15s;}
+.pad-connector .jack-slot-glow{fill:transparent;transition:fill .15s;}
+.pad-connector .jack-light{
+  fill:#4a4740;
+  stroke:rgba(0,0,0,.4);stroke-width:.6;
+  transition:fill .15s, filter .15s;
+}
+/* ---- estado: esperando conexión (ámbar) ---- */
+.pad-connector.awaiting .jack-slot{
+  fill:var(--amber);
+  filter:drop-shadow(0 0 5px var(--amber));
+  animation:ledblink .9s infinite;
+}
+.pad-connector.awaiting .jack-slot-glow{fill:var(--amber);animation:ledblink .9s infinite;}
+.pad-connector.awaiting .jack-body{fill:#2a2210;}
+.pad-connector.awaiting .jack-light{fill:var(--amber);filter:drop-shadow(0 0 4px var(--amber));animation:ledblink .9s infinite;}
+.pad-connector.awaiting svg{filter:drop-shadow(0 0 7px var(--amber)) drop-shadow(0 0 16px var(--amber));}
+/* ---- estado: parches conectados → luz ámbar fija y sutil (más tenue que el parpadeo de "esperando conexión") ---- */
+.pad-connector.ok .jack-slot{fill:var(--amber);filter:drop-shadow(0 0 2px var(--amber));}
+.pad-connector.ok .jack-slot-glow{fill:var(--amber);opacity:.4;}
+.pad-connector.ok .jack-body{fill:#241d0d;}
+.pad-connector.ok .jack-light{fill:var(--amber);filter:drop-shadow(0 0 2px var(--amber));}
+.pad-connector.ok svg{filter:drop-shadow(0 0 3px var(--amber));}
+
+/* ---------- pantalla LCD ---------- */
+.screen-frame{
+  flex:1 1 auto;
+  min-height:0;
+  position:relative;
+  background:linear-gradient(180deg,#2b2823,#141210);
+  border-radius:14px;
+  padding:clamp(8px,1.4vh,14px);
+  box-shadow:inset 0 0 0 2px #060504, inset 0 6px 14px rgba(0,0,0,.6), 0 2px 0 rgba(255,255,255,.08);
+  display:flex;
+}
+.lcd{
+  flex:1;
+  position:relative;
+  background:radial-gradient(ellipse at 50% 0%, var(--lcd-bg2), var(--lcd-bg) 70%);
+  border-radius:8px;
+  color:var(--phosphor);
+  font-family:var(--lcd-font);
+  overflow:hidden;
+  display:flex;flex-direction:column;
+  box-shadow:inset 0 0 30px rgba(0,0,0,.7);
+}
+.lcd::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0px, rgba(0,0,0,.18) 1px, transparent 1px, transparent 3px);
+  mix-blend-mode:multiply;
+  opacity:.5;
+}
+.lcd-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:clamp(6px,1vh,10px) clamp(10px,1.6vw,16px) 0;
+  font-size:clamp(10px,1.5vh,13px);
+  letter-spacing:.05em;
+  color:var(--phosphor-dim);
+  flex:0 0 auto;
+}
+.lcd-row .clock{color:var(--phosphor);}
+.lcd-row .mode-pill{
+  border:1px solid var(--phosphor-dim);border-radius:4px;padding:1px 8px;
+  color:var(--phosphor);font-size:clamp(9px,1.3vh,11px);letter-spacing:.12em;
+}
+.lcd-body{
+  flex:1 1 auto;min-height:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:clamp(6px,1.4vh,14px);
+  padding:0 clamp(14px,3vw,40px);
+  text-align:center;
+}
+.lcd-message{
+  font-size:clamp(16px,3.1vh,30px);
+  line-height:1.28;
+  font-weight:700;
+  white-space:pre-line;
+  text-shadow:0 0 8px rgba(121,255,155,.55);
+  min-height:2.4em;
+}
+.lcd-sub{
+  font-size:clamp(10px,1.5vh,13px);
+  color:var(--phosphor-dim);
+  letter-spacing:.03em;
+  max-width:44em;
+}
+.lcd-icon{margin-top:2px;color:var(--phosphor);filter:drop-shadow(0 0 6px rgba(121,255,155,.45));}
+.lcd-icon svg{width:clamp(64px,13vh,110px);height:auto;display:block;}
+.lcd-icon.pads svg{width:clamp(90px,17vh,150px);}
+.lcd-icon .compress-mark{transform-origin:50px 45px;animation:compress .55s ease-in-out infinite;}
+@keyframes compress{0%,100%{transform:translateY(0);}50%{transform:translateY(6px);}}
+.lcd-icon .lungs-mark{animation:breathe 1.4s ease-in-out infinite;}
+@keyframes breathe{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
+.lcd-icon.alert{color:var(--red);filter:drop-shadow(0 0 6px rgba(228,49,43,.55));}
+
+.ekg-wrap{
+  width:100%;
+  flex:0 0 auto;
+  padding:0 clamp(10px,2vw,20px) clamp(6px,1.2vh,12px);
+}
+canvas#ekg{
+  width:100%;display:block;height:clamp(46px,9vh,90px);
+}
+.cpr-timer{
+  position:absolute;top:clamp(6px,1vh,10px);right:clamp(10px,1.6vw,16px);
+  font-size:clamp(11px,1.7vh,15px);color:var(--amber);letter-spacing:.06em;
+  display:none;
+}
+.cpr-timer.show{display:block;}
+
+/* ---------- LEDs ---------- */
+.leds{
+  flex:0 0 auto;
+  display:flex;justify-content:center;gap:clamp(18px,4vw,54px);
+  padding:2px 0;
+}
+.led-item{display:flex;align-items:center;gap:8px;color:var(--ink);
+  font-family:var(--dev-font);font-weight:800;letter-spacing:.08em;
+  font-size:clamp(9px,1.3vh,12px);text-transform:uppercase;
+  text-shadow:0 1px 0 rgba(255,255,255,.6);
+}
+.led-dot{
+  width:clamp(10px,1.8vh,15px);height:clamp(10px,1.8vh,15px);border-radius:50%;
+  background:#56534c;box-shadow:inset 0 1px 3px rgba(0,0,0,.5), 0 1px 0 rgba(255,255,255,.4);
+  transition:box-shadow .15s, background .15s;
+}
+.led-dot.green.on{background:var(--green);box-shadow:0 0 10px 3px var(--green);}
+.led-dot.green.bad{background:var(--red);box-shadow:0 0 10px 3px var(--red);}
+.led-dot.amber.on{background:var(--amber);box-shadow:0 0 10px 3px var(--amber);}
+.led-dot.red.on{background:var(--red);box-shadow:0 0 12px 4px var(--red);}
+.led-dot.blink{animation:ledblink 1s infinite;}
+@keyframes ledblink{0%,49%{opacity:1;}50%,100%{opacity:.25;}}
+
+/* ---------- zona central: boton descarga ---------- */
+.shock-zone{
+  flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;
+  padding:clamp(4px,1vh,10px) 0;
+}
+.shock-btn{
+  position:relative;
+  width:clamp(88px,16vh,150px);height:clamp(88px,16vh,150px);
+  border-radius:50%;
+  border:none;
+  cursor:pointer;
+  background:radial-gradient(circle at 38% 32%, #7a1712, #4a0d0a 70%);
+  box-shadow:0 6px 0 #2c0705, 0 8px 14px rgba(0,0,0,.5), inset 0 2px 4px rgba(255,255,255,.15);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  color:#ffd8bf;
+  opacity:.55;
+  transition:opacity .2s;
+}
+.shock-btn:disabled{cursor:default;}
+.shock-btn.ready{
+  opacity:1;
+  color:#3a0e00;
+  animation:shockblink 1s steps(1,end) infinite;
+}
+@keyframes shockblink{
+  0%,49%{
+    background:radial-gradient(circle at 38% 32%, #ff7a1a, #d9430f 70%);
+    box-shadow:0 6px 0 #7a2405, 0 8px 22px rgba(255,140,20,.85), inset 0 2px 4px rgba(255,255,255,.4);
+  }
+  50%,100%{
+    background:radial-gradient(circle at 38% 32%, #7a1712, #4a0d0a 70%);
+    box-shadow:0 6px 0 #2c0705, 0 8px 10px rgba(0,0,0,.4), inset 0 2px 4px rgba(255,255,255,.12);
+  }
+}
+.shock-btn svg{width:38%;height:38%;}
+.shock-btn .lbl{font-family:var(--dev-font);font-weight:800;letter-spacing:.08em;font-size:clamp(11px,1.7vh,15px);margin-top:4px;}
+
+/* ---------- controles inferiores ---------- */
+.bottom-controls{
+  flex:0 0 auto;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:clamp(10px,2vw,20px);
+}
+.power-btn{
+  position:relative;
+  width:clamp(76px,13.5vh,128px);height:clamp(76px,13.5vh,128px);
+  border-radius:50%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:3px;
+  border:none;
+  cursor:pointer;
+  background:radial-gradient(circle at 38% 32%, #6a8a72, #35503e 70%);
+  box-shadow:0 6px 0 #1c2a20, 0 8px 14px rgba(0,0,0,.35), inset 0 2px 4px rgba(255,255,255,.18);
+  color:#d9ecdd;
+  transition:background .25s, box-shadow .25s, color .25s;
+}
+.power-btn:active{transform:translateY(2px);}
+.power-btn.is-on{
+  background:radial-gradient(circle at 38% 32%, #7CFF9E, #269d54 70%);
+  box-shadow:0 6px 0 #1c6e37, 0 8px 20px rgba(70,220,120,.55), inset 0 2px 4px rgba(255,255,255,.4);
+  color:#08260f;
+}
+.power-btn svg{width:30%;height:30%;}
+.power-btn .lbl{font-family:var(--dev-font);font-weight:800;letter-spacing:.04em;font-size:clamp(10px,1.4vh,13px);}
+.power-btn svg.power-hold-ring{
+  position:absolute;inset:-8px;width:calc(100% + 16px);height:calc(100% + 16px);
+  transform:rotate(-90deg);
+  pointer-events:none;
+  opacity:0;
+}
+.power-btn svg.power-hold-ring circle{
+  fill:none;stroke:var(--amber);stroke-width:6;stroke-linecap:round;
+  stroke-dasharray:289;stroke-dashoffset:289;
+}
+.power-btn.holding svg.power-hold-ring{opacity:1;}
+.power-btn.holding svg.power-hold-ring circle{animation:powerHoldRing 3s linear forwards;}
+@keyframes powerHoldRing{from{stroke-dashoffset:289;}to{stroke-dashoffset:0;}}
+
+.mode-toggle{
+  display:flex;align-items:center;
+  background:var(--panel);
+  border-radius:16px;
+  padding:4px;
+  box-shadow:inset 0 2px 5px rgba(0,0,0,.5), 0 2px 0 rgba(255,255,255,.08);
+  position:relative;
+}
+.mode-toggle button{
+  border:none;background:transparent;position:relative;z-index:1;
+  font-family:var(--dev-font);font-weight:800;letter-spacing:.05em;
+  font-size:clamp(11px,1.6vh,14px);
+  padding:clamp(9px,1.4vh,13px) clamp(14px,2.2vw,20px);
+  color:#c9c4b8;cursor:pointer;border-radius:12px;
+}
+.mode-toggle button.active{color:#241a00;}
+.mode-thumb{
+  position:absolute;top:4px;bottom:4px;left:4px;
+  width:calc(50% - 4px);
+  background:linear-gradient(180deg,#ffd75e,#f0a91e);
+  border-radius:12px;
+  box-shadow:0 2px 4px rgba(0,0,0,.4);
+  transition:transform .22s ease;
+}
+.mode-thumb.ped{transform:translateX(100%);}
+
+/* ---------- overlay apagado ---------- */
+.off-overlay{
+  position:absolute;inset:0;
+  background:linear-gradient(180deg,#151311,#0a0908);
+  border-radius:14px;
+  display:none;
+  align-items:center;justify-content:center;
+  flex-direction:column;gap:10px;
+  color:#5a544a;
+  text-align:center;
+  padding:20px;
+}
+.off-overlay.show{display:flex;}
+.off-overlay b{font-family:var(--dev-font);letter-spacing:.1em;font-size:clamp(13px,2vh,18px);color:#8a8175;}
+.off-overlay span{font-size:clamp(10px,1.4vh,13px);max-width:26em;}
+
+/* ---------- modal menu ---------- */
+.overlay-bg{
+  position:fixed;inset:0;background:rgba(0,0,0,.55);
+  display:none;align-items:center;justify-content:center;z-index:50;
+  padding:16px;
+}
+.overlay-bg.show{display:flex;}
+.menu-panel{
+  background:#1c1c1e;color:#eee;
+  width:min(720px,100%);max-height:92vh;
+  border-radius:18px;
+  display:flex;flex-direction:column;
+  overflow:hidden;
+  font-family:var(--ui-font);
+  box-shadow:0 20px 60px rgba(0,0,0,.5);
+}
+.menu-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 18px;border-bottom:1px solid #2e2e30;
+}
+.menu-head h2{margin:0;font-size:16px;letter-spacing:.02em;}
+.menu-head .close-x{
+  background:#2e2e30;border:none;color:#eee;width:32px;height:32px;border-radius:50%;
+  font-size:16px;cursor:pointer;
+}
+.tabs{display:flex;gap:2px;padding:8px 10px 0;overflow-x:auto;flex:0 0 auto;}
+.tabs button{
+  border:none;background:transparent;color:#9a9a9c;padding:10px 12px;font-size:12.5px;
+  border-radius:8px 8px 0 0;cursor:pointer;white-space:nowrap;font-weight:600;
+}
+.tabs button.active{background:#2e2e30;color:#fff;}
+.tab-content{padding:16px 18px 22px;overflow-y:auto;flex:1 1 auto;}
+.field-block{margin-bottom:18px;}
+.field-block h3{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#9a9a9c;margin:0 0 8px;}
+.radio-row, .chip-row{display:flex;flex-wrap:wrap;gap:8px;}
+.chip{
+  border:1px solid #3a3a3c;background:#242426;color:#ddd;border-radius:20px;
+  padding:8px 14px;font-size:13px;cursor:pointer;
+}
+.chip.active{background:#F2760F;border-color:#F2760F;color:#1a0e00;font-weight:700;}
+select, .txt-select{
+  width:100%;background:#242426;color:#eee;border:1px solid #3a3a3c;border-radius:10px;
+  padding:11px 12px;font-size:14px;
+}
+.seq-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-top:8px;}
+.btn{
+  border:none;border-radius:10px;padding:11px 16px;font-size:13.5px;font-weight:700;cursor:pointer;
+}
+.btn.primary{background:#F2760F;color:#1a0e00;}
+.btn.ghost{background:#2e2e30;color:#eee;}
+.btn.danger{background:#c0392b;color:#fff;}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;}
+.hint{font-size:12px;color:#8f8f92;line-height:1.5;margin-top:6px;}
+.log-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column-reverse;gap:6px;max-height:44vh;overflow-y:auto;}
+.log-list li{font-size:12.5px;background:#242426;border-radius:8px;padding:8px 10px;color:#cfcfcf;}
+.log-list li b{color:#F2A55E;font-weight:700;margin-right:6px;}
+.slider-row{display:flex;align-items:center;gap:12px;}
+.slider-row input[type=range]{flex:1;}
+.about-brand{font-size:20px;font-weight:800;letter-spacing:.02em;}
+.about-p{font-size:13.5px;color:#c7c7c9;line-height:1.6;margin:10px 0;}
+.disclaimer{background:#2a1f12;border:1px solid #5a3f10;color:#f0cf9a;border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.6;margin-top:12px;}
+
+@media (orientation:portrait){
+  .shock-btn{width:clamp(84px,20vw,130px);height:clamp(84px,20vw,130px);}
+  .power-btn{width:clamp(72px,17vw,112px);height:clamp(72px,17vw,112px);}
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="pad-connector" id="btnPadConnector" title="Conector de electrodos" aria-label="Conector de electrodos: pulsar para confirmar la colocación de los parches">
+        <svg viewBox="0 0 60 44" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="jackGlowBlur" x="-150%" y="-150%" width="400%" height="400%">
+              <feGaussianBlur stdDeviation="3.2"/>
+            </filter>
+          </defs>
+          <rect class="jack-body" x="4" y="6" width="42" height="22" rx="5"/>
+          <rect class="jack-slot-glow" x="10.5" y="13" width="11" height="9" rx="1.5" filter="url(#jackGlowBlur)"/>
+          <rect class="jack-slot-glow" x="28.5" y="13" width="11" height="9" rx="1.5" filter="url(#jackGlowBlur)"/>
+          <rect class="jack-slot" x="10.5" y="13" width="11" height="9" rx="1.5"/>
+          <rect class="jack-slot" x="28.5" y="13" width="11" height="9" rx="1.5"/>
+          <line x1="25" y1="28" x2="25" y2="34" stroke="#050402" stroke-width="2.4" stroke-linecap="round"/>
+          <circle class="jack-light" cx="25" cy="39" r="4.6"/>
+        </svg>
+      </button>
+      <div class="brand"><b>AlbertoGarra</b><span>Health Solutions · DESA Trainer</span></div>
+    </div>
+    <div class="corner-controls">
+      <button class="fab" id="btnMenu" title="Menú del instructor" aria-label="Menú del instructor">☰</button>
+    </div>
+  </div>
+
+  <div class="screen-frame">
+    <div class="lcd" id="lcd">
+      <div class="lcd-row">
+        <span id="lcdBattery">🔋 100%</span>
+        <span class="mode-pill" id="lcdModePill">ADULTO</span>
+        <span class="clock" id="lcdClock">--:--</span>
+      </div>
+      <div class="lcd-body">
+        <div class="lcd-icon" id="lcdIcon"></div>
+        <div class="lcd-message" id="lcdMessage">DESA · pulse ENCENDIDO para iniciar</div>
+        <div class="lcd-sub" id="lcdSub"></div>
+      </div>
+      <div class="ekg-wrap"><canvas id="ekg" width="900" height="140"></canvas></div>
+      <div class="cpr-timer" id="cprTimer">RCP · 02:00</div>
+    </div>
+    <div class="off-overlay" id="offOverlay">
+      <b>AlbertoGarra · DESA Trainer</b>
+      <span>Dispositivo apagado. Pulse el botón verde ENCENDER para iniciar la práctica.</span>
+    </div>
+  </div>
+
+  <div class="leds">
+    <div class="led-item"><span class="led-dot green" id="ledOk"></span>PARCHES</div>
+    <div class="led-item"><span class="led-dot amber" id="ledAnalyzing"></span>ANALIZANDO</div>
+    <div class="led-item"><span class="led-dot red" id="ledShock"></span>CARGANDO</div>
+  </div>
+
+  <div class="shock-zone">
+    <button class="shock-btn" id="btnShock" disabled aria-label="Botón de descarga">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 11-14h-7l0-6z"/></svg>
+      <span class="lbl">DESCARGA</span>
+    </button>
+  </div>
+
+  <div class="bottom-controls">
+    <button class="power-btn" id="btnPower">
+      <svg class="power-hold-ring" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="46"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/></svg>
+      <span class="lbl" id="powerLabel">ENCENDER</span>
+    </button>
+    <div class="mode-toggle" id="modeToggle">
+      <div class="mode-thumb" id="modeThumb"></div>
+      <button class="active" id="btnAdult" data-mode="ADULTO">ADULTO</button>
+      <button id="btnPed" data-mode="PEDIATRICO">PEDIÁTRICO</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ---------------- MENU INSTRUCTOR ---------------- -->
+<div class="overlay-bg" id="menuOverlay">
+  <div class="menu-panel">
+    <div class="menu-head">
+      <h2>Panel del instructor</h2>
+      <button class="close-x" id="closeMenu">✕</button>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="escenario">Escenario</button>
+      <button class="tab-btn" data-tab="vivo">Control en vivo</button>
+      <button class="tab-btn" data-tab="ajustes">Ajustes</button>
+      <button class="tab-btn" data-tab="registro">Registro</button>
+      <button class="tab-btn" data-tab="acerca">Acerca de</button>
+    </div>
+    <div class="tab-content">
+
+      <div class="tab-pane" data-pane="escenario">
+        <div class="field-block">
+          <h3>Modo de escenario</h3>
+          <div class="radio-row">
+            <button class="chip active" data-scenmode="ALEATORIO">Aleatorio</button>
+            <button class="chip" data-scenmode="MANUAL">Manual</button>
+          </div>
+          <p class="hint">En modo aleatorio, cada nuevo caso (tras colocar los parches) sortea uno de los escenarios clínicos predefinidos siguiendo las guías de soporte vital.</p>
+        </div>
+        <div class="field-block" id="manualScenarioBlock" style="display:none;">
+          <h3>Escenario predefinido</h3>
+          <select id="scenarioSelect"></select>
+          <p class="hint" id="scenarioDesc"></p>
+          <button class="btn primary" id="btnApplyScenario" style="margin-top:10px;">Aplicar al siguiente caso</button>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="vivo" style="display:none;">
+        <div class="field-block">
+          <h3>Forzar el próximo análisis</h3>
+          <p class="hint">Se aplicará únicamente en el siguiente análisis del ritmo, sin alterar el resto de la secuencia del caso.</p>
+          <div class="chip-row" id="forceRhythmRow"></div>
+        </div>
+        <div class="field-block">
+          <h3>Estado actual</h3>
+          <p class="hint" id="liveState">Dispositivo apagado.</p>
+          <p class="hint">La clavija de conexión de electrodos (esquina superior izquierda de la carcasa, junto al logo) se ilumina cuando hay que conectar los parches y confirma la colocación al pulsarla, avanzando automáticamente al siguiente paso. Pulsarla de nuevo con los parches ya conectados simula una desconexión (alarma) hasta volver a pulsarla.</p>
+        </div>
+        <div class="field-block">
+          <h3>Práctica</h3>
+          <div class="btn-row">
+            <button class="btn ghost" id="btnPause">Pausar</button>
+            <button class="btn ghost" id="btnNewCase">Forzar nuevo caso</button>
+            <button class="btn danger" id="btnResetAll">Reiniciar dispositivo</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="ajustes" style="display:none;">
+        <div class="field-block">
+          <h3>Duración de la RCP entre análisis</h3>
+          <div class="radio-row" id="cprDurationRow">
+            <button class="chip" data-cpr="20">20 s (demo)</button>
+            <button class="chip" data-cpr="60">60 s</button>
+            <button class="chip active" data-cpr="120">120 s (real)</button>
+          </div>
+        </div>
+        <div class="field-block">
+          <h3>Duración del análisis</h3>
+          <div class="radio-row" id="analysisDurationRow">
+            <button class="chip" data-an="5000">5 s</button>
+            <button class="chip active" data-an="8000">8 s</button>
+            <button class="chip" data-an="12000">12 s</button>
+          </div>
+        </div>
+        <div class="field-block">
+          <h3>Voz de instrucciones</h3>
+          <div class="slider-row">
+            <span style="width:70px;font-size:12.5px;">Volumen</span>
+            <input type="range" id="volSlider" min="0" max="1" step="0.05" value="1">
+          </div>
+          <div class="slider-row" style="margin-top:8px;">
+            <span style="width:70px;font-size:12.5px;">Velocidad</span>
+            <input type="range" id="rateSlider" min="0.7" max="1.2" step="0.05" value="0.95">
+          </div>
+          <div class="radio-row" style="margin-top:10px;">
+            <button class="chip active" id="btnVoiceOn">Voz activada</button>
+            <button class="chip" id="btnVoiceOff">Voz desactivada</button>
+          </div>
+        </div>
+        <div class="field-block">
+          <h3>Metrónomo de compresiones</h3>
+          <div class="radio-row">
+            <button class="chip active" id="btnMetroOn">Activado</button>
+            <button class="chip" id="btnMetroOff">Desactivado</button>
+          </div>
+        </div>
+        <div class="field-block">
+          <h3>Monitor ECG en pantalla</h3>
+          <div class="radio-row">
+            <button class="chip" id="btnEkgOn">Visible</button>
+            <button class="chip active" id="btnEkgOff">Oculto (DESA básico)</button>
+          </div>
+          <p class="hint">Ocultarlo entrena al alumno a guiarse solo por los mensajes de voz, como en los modelos de DESA sin pantalla de monitor.</p>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="registro" style="display:none;">
+        <div class="field-block">
+          <div class="btn-row" style="margin-bottom:10px;">
+            <button class="btn ghost" id="btnClearLog">Vaciar registro</button>
+          </div>
+          <ul class="log-list" id="logList"></ul>
+        </div>
+      </div>
+
+      <div class="tab-pane" data-pane="acerca" style="display:none;">
+        <div class="about-brand">AlbertoGarra · Health Solutions</div>
+        <p class="about-p">Simulador de desfibrilador semiautomático (DESA) para la formación en reanimación cardiopulmonar. Reproduce el flujo de trabajo, la voz de instrucciones y los escenarios clínicos de un DESA real con fines exclusivamente docentes.</p>
+        <p class="about-p">Ritmos simulados: fibrilación ventricular, taquicardia ventricular sin pulso, asistolia, actividad eléctrica sin pulso y ritmo organizado, según los algoritmos de soporte vital vigentes.</p>
+        <div class="disclaimer">Este dispositivo es un simulador educativo. No es un equipo médico real, no debe emplearse sobre pacientes y no sustituye la formación oficial ni certificada en soporte vital.</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   DATOS CLÍNICOS
+   ============================================================ */
+const RHYTHM_LABELS = {
+  FV:'Fibrilación ventricular',
+  TVSP:'Taquicardia ventricular sin pulso',
+  ASISTOLIA:'Asistolia',
+  AESP:'Actividad eléctrica sin pulso',
+  ORGANIZADO:'Ritmo organizado (posible pulso)'
+};
+const SHOCKABLE = new Set(['FV','TVSP']);
+
+const SCENARIOS = [
+  {id:'fv_refractaria', name:'Fibrilación ventricular refractaria', sequence:['FV','FV','FV','FV','FV']},
+  {id:'fv_revierte', name:'FV que revierte tras la 1ª descarga', sequence:['FV','ORGANIZADO']},
+  {id:'asistolia_persistente', name:'Asistolia persistente', sequence:['ASISTOLIA','ASISTOLIA','ASISTOLIA','ASISTOLIA']},
+  {id:'aesp_a_fv', name:'AESP que degenera en fibrilación ventricular', sequence:['AESP','AESP','FV','FV']},
+  {id:'tvsp_revierte', name:'Taquicardia ventricular sin pulso que revierte', sequence:['TVSP','TVSP','ORGANIZADO']},
+  {id:'asistolia_recupera', name:'Asistolia con recuperación tras RCP prolongada', sequence:['ASISTOLIA','ASISTOLIA','AESP','ORGANIZADO']},
+];
+
+/* ============================================================
+   ESTADO
+   ============================================================ */
+const state = {
+  power:false,
+  runId:0,
+  mode:'ADULTO',
+  awaitingPads:false,
+  padsOk:false,
+  padsEverConnected:false,
+  badContactInterval:null,
+  shockReady:false,
+  shockCount:0,
+  cycleIndex:0,
+  currentScenario:null,
+  scenarioMode:'ALEATORIO',
+  manualScenarioId:SCENARIOS[0].id,
+  forcedNextRhythm:null,
+  paused:false,
+  cprSecondsLeft:0,
+  cprTotal:120,
+  cprInterval:null,
+  metroInterval:null,
+  cprBeatNum:0,
+  cprBeatTimer:null,
+  cprAlertPhase:false,
+  cprActive:false,
+  analysisPending:false,
+  keepRhythmBeat:null,
+  analysisTimer:null,
+  analysisTickInterval:null,
+  ventTimers:[],
+  caseStartTime:null,
+  currentRhythm:'FLAT',
+  padsReminderInterval:null,
+  padsReminderMsg:'',
+  shockTimeout:null,
+  settings:{
+    cprDuration:120,
+    analysisDuration:8000,
+    voiceEnabled:true,
+    voiceVolume:1,
+    speechRate:0.95,
+    metronomeEnabled:true,
+    ekgVisible:false
+  },
+  log:[]
+};
+
+/* ============================================================
+   REFERENCIAS DOM
+   ============================================================ */
+const $ = (sel)=>document.querySelector(sel);
+const lcdMessage = $('#lcdMessage');
+const lcdSub = $('#lcdSub');
+const lcdModePill = $('#lcdModePill');
+const lcdClock = $('#lcdClock');
+const lcdBattery = $('#lcdBattery');
+const lcdIcon = $('#lcdIcon');
+const cprTimerEl = $('#cprTimer');
+const ledOk = $('#ledOk');
+const ledAnalyzing = $('#ledAnalyzing');
+const ledShock = $('#ledShock');
+const shockBtn = $('#btnShock');
+const powerBtn = $('#btnPower');
+const powerLabel = $('#powerLabel');
+const offOverlay = $('#offOverlay');
+const modeThumb = $('#modeThumb');
+const btnAdult = $('#btnAdult');
+const btnPed = $('#btnPed');
+const btnPadConnector = $('#btnPadConnector');
+const menuOverlay = $('#menuOverlay');
+const liveStateEl = $('#liveState');
+const logListEl = $('#logList');
+const ekgCanvas = document.getElementById('ekg');
+const ekgCtx = ekgCanvas.getContext('2d');
+
+/* ============================================================
+   ICONOS DE ACCIÓN (pictogramas del LCD)
+   ============================================================ */
+const ICON_STROKE = 'fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"';
+const ICONS = {
+  boot: `<svg viewBox="0 0 100 100" ${ICON_STROKE}><circle cx="50" cy="50" r="36"/><path d="M32 51 L44 63 L70 34"/></svg>`,
+
+  check: `<svg viewBox="0 0 100 100" ${ICON_STROKE}><circle cx="50" cy="26" r="14"/><path d="M22 90 C22 64 34 52 50 52 C66 52 78 64 78 90"/><path d="M82 36 Q90 44 82 52"/><path d="M90 26 Q102 44 90 62"/></svg>`,
+
+  call: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>`,
+
+  pads: `<svg viewBox="0 0 120 150" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="60" cy="16" r="13"/>
+      <path d="M50 27 C48 30 46 32 42 34 M70 27 C72 30 74 32 78 34"/>
+      <path d="M42 34
+               C34 36 26 40 22 44
+               C19 52 19 58 20 64
+               C21 74 24 84 26 96
+               C27 108 27 120 28 130
+               C29 138 30 144 33 148
+               C42 152 78 152 87 148
+               C90 144 91 138 92 130
+               C93 120 93 108 94 96
+               C96 84 99 74 100 64
+               C101 58 101 52 98 44
+               C94 40 86 36 78 34
+               Z"/>
+      <path d="M45 41 C50 44 55 45 60 45 C65 45 70 44 75 41" stroke-width="2" opacity=".55"/>
+      <path d="M30 60 C40 68 50 72 60 72 C70 72 80 68 90 60" stroke-width="2" opacity=".35"/>
+      <line x1="60" y1="45" x2="60" y2="118" stroke-width="1.5" stroke-dasharray="4 5" opacity=".5"/>
+      <path d="M24 86 C40 92 80 92 96 86" stroke-width="1.6" opacity=".3"/>
+      <path d="M26 102 C42 108 78 108 94 102" stroke-width="1.6" opacity=".3"/>
+      <path d="M28 120 C42 125 78 125 92 120" stroke-width="1.6" opacity=".3"/>
+      <rect x="26" y="54" width="27" height="20" rx="4" fill="currentColor" stroke="none" opacity=".92"/>
+      <text x="39.5" y="68.5" font-size="12" text-anchor="middle" fill="#08120C" font-family="Arial" font-weight="700" stroke="none">1</text>
+      <rect x="65" y="64" width="26" height="20" rx="4" fill="currentColor" stroke="none" opacity=".92"/>
+      <text x="78" y="78.5" font-size="12" text-anchor="middle" fill="#08120C" font-family="Arial" font-weight="700" stroke="none">2</text>
+    </svg>`,
+
+  analyze: `<svg viewBox="0 0 100 100" ${ICON_STROKE}><circle cx="50" cy="50" r="38" stroke-dasharray="6 7" opacity=".6"/><polyline points="16,52 33,52 40,30 50,72 59,38 66,52 84,52"/></svg>`,
+
+  charging: `<svg viewBox="0 0 100 100" ${ICON_STROKE}><rect x="28" y="14" width="44" height="76" rx="9"/><rect x="42" y="6" width="16" height="9" rx="2" fill="currentColor" stroke="none"/><path d="M56 26 L38 56 L49 56 L44 82 L66 48 L55 48 Z" fill="currentColor" stroke="none"/></svg>`,
+
+  shockReady: `<svg viewBox="0 0 100 100" ${ICON_STROKE}><path d="M50 8 L50 22"/><path d="M40 16 L50 24 L60 16"/><circle cx="50" cy="62" r="26"/><path d="M55 46 L41 64 L49 64 L45 80 L61 58 L53 58 Z" fill="currentColor" stroke="none"/></svg>`,
+
+  shockDelivered: `<svg viewBox="0 0 100 100" ${ICON_STROKE}><path d="M55 10 L34 52 L47 52 L41 90 L70 42 L56 42 Z" fill="currentColor" stroke="none"/><path d="M14 30 L24 34 M12 50 L23 50 M16 70 L26 65" opacity=".7"/><path d="M86 30 L76 34 M88 50 L77 50 M84 70 L74 65" opacity=".7"/></svg>`,
+
+  noShock: `<svg viewBox="0 0 100 100" ${ICON_STROKE}><circle cx="50" cy="50" r="38"/><line x1="26" y1="26" x2="74" y2="74"/></svg>`,
+
+  compress: `<svg viewBox="0 0 100 100" ${ICON_STROKE}><rect x="24" y="58" width="52" height="32" rx="12"/><g class="compress-mark"><path d="M50 6 L50 34"/><path d="M40 16 L50 6 L60 16"/><path d="M40 30 L50 40 L60 30"/><circle cx="50" cy="47" r="6" fill="currentColor" stroke="none"/></g></svg>`,
+
+  ventilate: `<svg viewBox="0 0 100 100" ${ICON_STROKE}><g class="lungs-mark"><path d="M50 14 L50 38"/><path d="M50 38 C34 38 24 54 25 70 C26 83 35 89 41 82 C45 77 45 63 45 52"/><path d="M50 38 C66 38 76 54 75 70 C74 83 65 89 59 82 C55 77 55 63 55 52"/></g><path d="M18 20 Q26 26 18 32" opacity=".7"/><path d="M82 20 Q74 26 82 32" opacity=".7"/></svg>`,
+
+  badContact: `<svg viewBox="0 0 100 100" ${ICON_STROKE}><path d="M50 12 L92 84 L8 84 Z"/><path d="M50 38 L50 60"/><circle cx="50" cy="72" r="1.5" fill="currentColor" stroke-width="6"/></svg>`,
+
+  power: `<svg viewBox="0 0 100 100" ${ICON_STROKE}><circle cx="50" cy="50" r="38"/><path d="M50 26 L50 50"/></svg>`
+};
+function setIcon(key, opts){
+  if(!key){ lcdIcon.innerHTML=''; lcdIcon.className='lcd-icon'; return; }
+  lcdIcon.innerHTML = ICONS[key] || '';
+  lcdIcon.className = 'lcd-icon'+(key==='pads' ? ' pads' : '')+(opts&&opts.alert ? ' alert' : '');
+}
+
+/* ============================================================
+   RELOJ
+   ============================================================ */
+function tickClock(){
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  lcdClock.textContent = hh+':'+mm;
+}
+setInterval(tickClock,1000);
+tickClock();
+
+/* ============================================================
+   AUDIO: tonos y metrónomo
+   ============================================================ */
+let audioCtx = null;
+function ensureAudioCtx(){
+  if(!audioCtx){
+    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  }
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  return audioCtx;
+}
+function beep({freq=880,duration=0.09,type='sine',gain=0.18,when=0}={}){
+  try{
+    const ctx = ensureAudioCtx();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type=type; osc.frequency.value=freq;
+    g.gain.value=gain;
+    osc.connect(g).connect(ctx.destination);
+    const t0 = ctx.currentTime+when;
+    osc.start(t0);
+    g.gain.setValueAtTime(gain,t0);
+    g.gain.exponentialRampToValueAtTime(0.0008,t0+duration);
+    osc.stop(t0+duration+0.03);
+  }catch(e){/* audio no disponible */}
+}
+function bootBeeps(){
+  beep({freq:520,duration:.08});
+  setTimeout(()=>beep({freq:780,duration:.08}),160);
+  setTimeout(()=>beep({freq:1040,duration:.12}),320);
+}
+function analysisTick(){ beep({freq:660,duration:.06,gain:.12}); }
+function chargingSound(seconds){
+  try{
+    const ctx = ensureAudioCtx();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type='sine';
+    osc.connect(g).connect(ctx.destination);
+    const t0=ctx.currentTime;
+    osc.frequency.setValueAtTime(260,t0);
+    osc.frequency.exponentialRampToValueAtTime(780,t0+seconds);
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.exponentialRampToValueAtTime(0.05,t0+seconds*0.6);
+    g.gain.exponentialRampToValueAtTime(0.022,t0+seconds*0.92);
+    g.gain.linearRampToValueAtTime(0,t0+seconds);
+    osc.start(t0); osc.stop(t0+seconds+0.05);
+  }catch(e){}
+}
+function longVentBeep(){ beep({freq:340,duration:1.0,type:'sine',gain:0.42}); }
+function badContactBeep(){ beep({freq:1500,duration:.11,gain:.13,type:'square'}); }
+function shockSound(){
+  beep({freq:120,duration:.22,type:'square',gain:.3});
+  setTimeout(()=>beep({freq:1400,duration:.05,gain:.15}),10);
+}
+/* ------------------------------------------------------------
+   Metrónomo de RCP — ciclos reales de 30:2.
+   Por cada tramo de compresiones (110 lpm) se emiten exactamente:
+     · 25 tonos de compresión normales
+     · 5 tonos distintos de compresión, prealertando la ventilación inminente
+   y a continuación 2 tonos largos y distintos de ventilación (ver performVentilationPause).
+   Esto se repite igual en todos los tramos de todos los ciclos mientras dure la RCP.
+   ------------------------------------------------------------ */
+const CPR_BPM = 110;
+const CPR_BEAT_MS = 60000/CPR_BPM;
+const CPR_NORMAL_BEATS = 25;   // tonos de compresión normales
+const CPR_PREALERT_BEATS = 5;  // tonos distintos, prealertando la ventilación
+const CPR_CYCLE_BEATS = CPR_NORMAL_BEATS + CPR_PREALERT_BEATS; // 30 → ratio 30:2
+
+function stopMetronome(){
+  if(state.cprBeatTimer){ clearTimeout(state.cprBeatTimer); state.cprBeatTimer=null; }
+}
+function startMetronome(myRun){
+  stopMetronome();
+  state.cprBeatTimer = setTimeout(()=>playCprBeat(myRun), CPR_BEAT_MS);
+}
+function playCprBeat(myRun){
+  if(!isCurrent(myRun) || !state.cprActive || state.paused) return;
+  state.cprBeatNum++;
+  if(state.cprBeatNum===1){
+    // de vez en cuando, en un punto aleatorio del tramo de compresiones, se recuerda el ritmo a los alumnos
+    state.keepRhythmBeat = (Math.random()<0.45) ? (7+Math.floor(Math.random()*12)) : null;
+  }
+  const isPrealert = state.cprBeatNum > CPR_NORMAL_BEATS;
+  state.cprAlertPhase = isPrealert;
+  if(state.settings.metronomeEnabled){
+    if(isPrealert){
+      beep({freq:1500,duration:.05,gain:.17,type:'square'}); // tono distinto: ventilación inminente
+    } else {
+      beep({freq:1000,duration:.045,gain:.14,type:'square'}); // tono de compresión normal
+    }
+  }
+  if(state.cprBeatNum===state.keepRhythmBeat){
+    speak('Mantenga el ritmo.');
+  }
+  if(state.cprBeatNum>=CPR_CYCLE_BEATS){
+    state.cprBeatNum=0;
+    state.cprAlertPhase=false;
+    if(state.analysisPending){
+      finishCprAndAnalyze(myRun);
+      return;
+    }
+    performVentilationPause(myRun);
+    return;
+  }
+  state.cprBeatTimer = setTimeout(()=>playCprBeat(myRun), CPR_BEAT_MS);
+}
+
+/* ============================================================
+   VOZ
+   ============================================================ */
+let spanishVoice = null;
+function loadVoices(){
+  if(!('speechSynthesis' in window)) return;
+  const voices = speechSynthesis.getVoices();
+  spanishVoice = voices.find(v=>v.lang && v.lang.toLowerCase().startsWith('es')) || null;
+}
+if('speechSynthesis' in window){
+  loadVoices();
+  speechSynthesis.onvoiceschanged = loadVoices;
+}
+function estimateSpeechMs(text){
+  const words = text.trim().split(/\s+/).length;
+  return Math.max(900, Math.round(words*370/(state.settings.speechRate||1)));
+}
+function speak(text,onend){
+  if(state.settings.voiceEnabled && 'speechSynthesis' in window){
+    try{
+      speechSynthesis.cancel(); // evita solapes; la app siempre habla en serie
+    }catch(e){}
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang='es-ES';
+    u.rate=state.settings.speechRate;
+    u.volume=state.settings.voiceVolume;
+    if(spanishVoice) u.voice=spanishVoice;
+    let done=false;
+    const finish=()=>{ if(done) return; done=true; onend&&onend(); };
+    u.onend=finish;
+    u.onerror=finish;
+    speechSynthesis.speak(u);
+  } else {
+    setTimeout(()=>{ onend&&onend(); }, estimateSpeechMs(text));
+  }
+}
+function announce(lcdText, speechText, onend){
+  setLcd(lcdText);
+  speak(speechText, onend);
+}
+
+/* ============================================================
+   UI helpers
+   ============================================================ */
+function setLcd(text, sub){
+  lcdMessage.textContent = text;
+  lcdSub.textContent = sub||'';
+}
+function setLed(which,on,blink){
+  const map={ok:ledOk, analyzing:ledAnalyzing, shock:ledShock};
+  Object.keys(map).forEach(k=>{
+    map[k].classList.remove('on','blink','bad');
+  });
+  if(which && map[which]){
+    map[which].classList.add('on');
+    if(blink) map[which].classList.add('blink');
+  }
+}
+function setPadsAlarm(active){
+  ledOk.classList.remove('on','blink','bad');
+  if(active){ ledOk.classList.add('bad','blink'); }
+}
+function isCurrent(runId){ return state.power && state.runId===runId; }
+
+function logEvent(text){
+  const d=new Date();
+  const t = String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
+  state.log.push({t,text});
+  renderLog();
+}
+function renderLog(){
+  logListEl.innerHTML = state.log.map(e=>`<li><b>${e.t}</b>${escapeHtml(e.text)}</li>`).join('');
+}
+function escapeHtml(s){ return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function updateLiveState(){
+  if(!state.power){ liveStateEl.textContent='Dispositivo apagado.'; return; }
+  let txt = 'Encendido · modo '+state.mode+'.';
+  if(state.currentScenario) txt += ' Caso: '+state.currentScenario.name+' (ciclo '+(state.cycleIndex+1)+').';
+  if(state.forcedNextRhythm) txt += ' Próximo análisis forzado a: '+RHYTHM_LABELS[state.forcedNextRhythm]+'.';
+  if(state.padsEverConnected && !state.padsOk) txt += ' ⚠ Mala conexión de electrodos simulada.';
+  liveStateEl.textContent = txt;
+}
+function updatePadConnector(){
+  btnPadConnector.classList.remove('awaiting','ok');
+  if(!state.power){
+    btnPadConnector.title = 'Conector de electrodos';
+  } else if(state.padsOk){
+    btnPadConnector.classList.add('ok');
+    btnPadConnector.title = 'Parches conectados · pulsar para simular una desconexión';
+  } else {
+    btnPadConnector.classList.add('awaiting');
+    btnPadConnector.title = 'Conecte aquí el conector de los electrodos';
+  }
+}
+
+/* ============================================================
+   ECG — trazado en canvas
+   ============================================================ */
+const EKG_W = ekgCanvas.width, EKG_H = ekgCanvas.height;
+let ekgBuffer = new Array(220).fill(0);
+let ekgPhase = 0;
+function nextSample(rhythm){
+  ekgPhase++;
+  switch(rhythm){
+    case 'FV': {
+      return (Math.sin(ekgPhase*0.9)+Math.sin(ekgPhase*0.37)+  (Math.random()-0.5)*1.6) * 0.5;
+    }
+    case 'TVSP': {
+      const period=14;
+      const p = ekgPhase % period;
+      return Math.sin((p/period)*Math.PI*2) * 0.85;
+    }
+    case 'ASISTOLIA': {
+      return (Math.random()-0.5)*0.03;
+    }
+    case 'ARTEFACTO': {
+      return (Math.random()-0.5) * (Math.random()<0.08 ? 1.9 : 0.9);
+    }
+    case 'AESP':
+    case 'ORGANIZADO': {
+      const period=42;
+      const p = ekgPhase % period;
+      if(p===0) return 0.05;
+      if(p===2) return -0.15;
+      if(p===3) return 1.0;
+      if(p===4) return -0.35;
+      if(p===5) return 0.05;
+      if(p>=14 && p<=20) return Math.sin(((p-14)/6)*Math.PI)*0.22;
+      return (Math.random()-0.5)*0.02;
+    }
+    default: return 0; // FLAT
+  }
+}
+function ekgLoop(){
+  if(state.settings.ekgVisible && state.power){
+    ekgBuffer.push(nextSample(state.currentRhythm));
+    ekgBuffer.shift();
+  }
+  drawEkg();
+  requestAnimationFrame(ekgLoop);
+}
+function drawEkg(){
+  ekgCtx.clearRect(0,0,EKG_W,EKG_H);
+  if(!state.settings.ekgVisible || !state.power){ return; }
+  ekgCtx.strokeStyle = '#79FF9B';
+  ekgCtx.lineWidth = 3;
+  ekgCtx.shadowColor='rgba(121,255,155,.65)';
+  ekgCtx.shadowBlur=6;
+  ekgCtx.beginPath();
+  const step = EKG_W/(ekgBuffer.length-1);
+  const mid = EKG_H/2;
+  for(let i=0;i<ekgBuffer.length;i++){
+    const x = i*step;
+    const y = mid - ekgBuffer[i]*(EKG_H*0.42);
+    if(i===0) ekgCtx.moveTo(x,y); else ekgCtx.lineTo(x,y);
+  }
+  ekgCtx.stroke();
+}
+requestAnimationFrame(ekgLoop);
+
+/* ============================================================
+   ESCENARIOS
+   ============================================================ */
+function pickScenario(){
+  if(state.scenarioMode==='MANUAL'){
+    return SCENARIOS.find(s=>s.id===state.manualScenarioId) || SCENARIOS[0];
+  }
+  return SCENARIOS[Math.floor(Math.random()*SCENARIOS.length)];
+}
+function getNextRhythm(){
+  if(state.forcedNextRhythm){
+    const r = state.forcedNextRhythm;
+    state.forcedNextRhythm = null;
+    renderForceChips();
+    updateLiveState();
+    return r;
+  }
+  const seq = state.currentScenario.sequence;
+  const idx = Math.min(state.cycleIndex, seq.length-1);
+  return seq[idx];
+}
+function energyForShock(){
+  const base = state.mode==='PEDIATRICO' ? [50,50,50] : [150,150,200];
+  const i = Math.min(state.shockCount, base.length-1);
+  return base[i];
+}
+
+/* ============================================================
+   MOTOR PRINCIPAL DEL DESA
+   ============================================================ */
+function powerOn(){
+  if(state.power) return;
+  ensureAudioCtx();
+  state.power = true;
+  state.runId++;
+  const myRun = state.runId;
+  offOverlay.classList.remove('show');
+  powerBtn.classList.add('is-on');
+  powerLabel.textContent='APAGAR';
+  state.padsOk=false;
+  state.padsEverConnected=false;
+  logEvent('Dispositivo encendido.');
+  bootBeeps();
+  setIcon('boot');
+  setLcd('Realizando autocomprobación…');
+  setLed(null);
+  updatePadConnector();
+  state.currentRhythm='FLAT';
+  setTimeout(()=>{
+    if(!isCurrent(myRun)) return;
+    setLcd('Autocomprobación superada.\nDispositivo listo.');
+    announce('Dispositivo listo.', 'Desfibrilador encendido. Siga las instrucciones de voz.', ()=>checkResponsiveness(myRun));
+  },1400);
+  updateLiveState();
+}
+
+function checkResponsiveness(myRun){
+  if(!isCurrent(myRun)) return;
+  setIcon('check');
+  announce(
+    'Compruebe si la víctima responde\ny si respira con normalidad.',
+    'Compruebe si la víctima responde y si respira con normalidad. Si no responde y no respira con normalidad, continúe.',
+    ()=>callForHelp(myRun)
+  );
+}
+function callForHelp(myRun){
+  if(!isCurrent(myRun)) return;
+  setIcon('call');
+  announce(
+    'Solicite ayuda.',
+    'Solicite ayuda.',
+    ()=>proceedToPads(myRun)
+  );
+}
+function proceedToPads(myRun){
+  if(!isCurrent(myRun)) return;
+  setIcon('pads');
+  announce(
+    'Aplique los electrodos sobre el pecho descubierto\ndel paciente, como se muestra en la imagen.\nEnchufe el conector de los electrodos\njunto a la luz intermitente.',
+    'Aplique los electrodos sobre el pecho descubierto del paciente, como se muestra en la imagen. Enchufe el conector de los electrodos junto a la luz intermitente.',
+    ()=>waitForPads(myRun)
+  );
+}
+function waitForPads(myRun){
+  if(!isCurrent(myRun)) return;
+  updatePadConnector();
+  if(state.padsOk){
+    // Los electrodos ya se conectaron de antemano (primera vez): hemos llegado igualmente
+    // al punto de "esperando conexión de electrodos", así que continuamos sin más demora.
+    logEvent('Electrodos ya conectados de antemano; se continúa tras la introducción guiada.');
+    startNewCase(myRun);
+    return;
+  }
+  state.awaitingPads = true;
+  setIcon('pads');
+  setLcd('Esperando la colocación\nde los electrodos…','Conecte la clavija iluminada de la carcasa cuando los parches estén colocados');
+  setLed('ok',true,true);
+  updatePadConnector();
+  startPadsReminder('Aplique los electrodos sobre el pecho descubierto del paciente, como se muestra en la imagen. Enchufe el conector de los electrodos junto a la luz intermitente.');
+  updateLiveState();
+}
+
+/* ------------------------------------------------------------
+   Instructor: confirmar contacto / simular mala conexión.
+   Disponible en cualquier momento de la simulación.
+   ------------------------------------------------------------ */
+function handlePadConnector(){
+  if(!state.power){ beep({freq:300,duration:.06,gain:.08}); return; }
+  if(state.padsOk) simulateBadContact(); else confirmGoodContact();
+}
+function clearVentTimers(){
+  state.ventTimers.forEach(id=>clearTimeout(id));
+  state.ventTimers=[];
+}
+const PADS_REMINDER_MS = 10000;
+function startPadsReminder(message){
+  stopPadsReminder();
+  state.padsReminderMsg = message;
+  state.padsReminderInterval = setInterval(()=>{
+    if(!state.power || !state.awaitingPads){ stopPadsReminder(); return; }
+    speak(state.padsReminderMsg);
+  }, PADS_REMINDER_MS);
+}
+function stopPadsReminder(){
+  if(state.padsReminderInterval){ clearInterval(state.padsReminderInterval); state.padsReminderInterval=null; }
+}
+function stopBadContactAlarm(){
+  if(state.badContactInterval){ clearInterval(state.badContactInterval); state.badContactInterval=null; }
+}
+function startBadContactAlarm(){
+  stopBadContactAlarm();
+  state.badContactInterval = setInterval(badContactBeep, 1500);
+}
+function interruptCurrentActivity(){
+  try{ speechSynthesis.cancel(); }catch(e){}
+  clearTimeout(state.analysisTimer);
+  clearInterval(state.analysisTickInterval);
+  clearInterval(state.cprInterval); state.cprInterval=null;
+  clearTimeout(state.shockTimeout); state.shockTimeout=null;
+  clearVentTimers();
+  stopMetronome();
+  stopPadsReminder();
+  state.analysisPending = false;
+  state.cprActive = false;
+  cprTimerEl.classList.remove('show');
+  shockBtn.disabled=true; shockBtn.classList.remove('ready'); state.shockReady=false;
+}
+function confirmGoodContact(){
+  const hadCase = !!state.currentScenario;
+  if(!hadCase && !state.awaitingPads){
+    // Primera vez: aunque el instructor conecte los electrodos antes de que el DESA
+    // lo pida, no nos saltamos la introducción guiada. Solo marcamos los parches como
+    // conectados y dejamos que la secuencia en curso llegue por sí misma hasta el punto
+    // de "esperando conexión de electrodos" (ver waitForPads), sin interrumpir nada.
+    state.padsOk=true;
+    state.padsEverConnected=true;
+    updatePadConnector();
+    logEvent('Electrodos colocados de antemano (confirmado por el instructor). Se completará primero la introducción guiada.');
+    updateLiveState();
+    return;
+  }
+  interruptCurrentActivity();
+  stopBadContactAlarm();
+  state.awaitingPads=false;
+  state.padsOk=true;
+  state.padsEverConnected=true;
+  state.runId++;
+  const myRun = state.runId;
+  setLed(null);
+  setIcon('pads');
+  updatePadConnector();
+  logEvent(hadCase ? 'Electrodos reconectados (confirmado por el instructor).' : 'Electrodos colocados (confirmado por el instructor).');
+  if(!hadCase){
+    startNewCase(myRun);
+  } else {
+    startAnalysis(myRun);
+  }
+  updateLiveState();
+}
+function simulateBadContact(){
+  if(!state.padsEverConnected){ beep({freq:300,duration:.06,gain:.08}); return; }
+  // No se interrumpe el ciclo en curso ni se avisa nada en el momento: el DESA real
+  // solo detecta la pérdida de contacto en el siguiente análisis de ritmo, momento en el
+  // que se avisará a los alumnos con la frase inicial de "aplique los electrodos".
+  state.padsOk=false;
+  updatePadConnector();
+  logEvent('Mala conexión de electrodos simulada por el instructor (no se avisará hasta el próximo análisis de ritmo).');
+  updateLiveState();
+}
+function startNewCase(myRun){
+  if(!isCurrent(myRun)) return;
+  state.currentScenario = pickScenario();
+  state.cycleIndex = 0;
+  state.shockCount = 0;
+  state.caseStartTime = Date.now();
+  logEvent('Nuevo caso iniciado · '+ (state.scenarioMode==='MANUAL' ? state.currentScenario.name : 'escenario aleatorio') );
+  updateLiveState();
+  startAnalysis(myRun);
+}
+function startAnalysis(myRun){
+  if(!isCurrent(myRun)) return;
+  if(!state.padsOk){
+    stopBadContactAlarm();
+    state.awaitingPads = true;
+    setPadsAlarm(false);
+    setIcon('pads');
+    setLed('ok',true,true);
+    updatePadConnector();
+    announce('Aplique los electrodos sobre el pecho descubierto\ndel paciente, como se muestra en la imagen.','Aplique los electrodos sobre el pecho descubierto del paciente, como se muestra en la imagen.');
+    startPadsReminder('Aplique los electrodos sobre el pecho descubierto del paciente, como se muestra en la imagen.');
+    updateLiveState();
+    return;
+  }
+  setLed('analyzing',true,true);
+  setIcon('analyze');
+  const rhythm = getNextRhythm();
+  state.currentRhythm = rhythm;
+  setLcd('Analizando el ritmo cardiaco.\nNO TOQUE AL PACIENTE.');
+  speak('Analizando el ritmo cardiaco. No toque al paciente.');
+  state.analysisTickInterval = setInterval(()=>{
+    if(!isCurrent(myRun)){ clearInterval(state.analysisTickInterval); return; }
+    analysisTick();
+  }, 900);
+  state.analysisTimer = setTimeout(()=>{
+    clearInterval(state.analysisTickInterval);
+    if(!isCurrent(myRun)) return;
+    logEvent('Análisis completado → '+RHYTHM_LABELS[rhythm]+' (visible solo para el instructor).');
+    resolveAnalysis(rhythm, myRun);
+  }, state.settings.analysisDuration);
+}
+function resolveAnalysis(rhythm, myRun){
+  if(!isCurrent(myRun)) return;
+  if(SHOCKABLE.has(rhythm)){
+    setLed('shock',true);
+    setIcon('charging');
+    setLcd('DESCARGA ACONSEJADA.\nCargando. Aléjese del paciente.');
+    chargingSound(3.2);
+    speak('Descarga aconsejada. Cargando el desfibrilador. Aléjese del paciente, no lo toque.', ()=>{
+      if(!isCurrent(myRun)) return;
+      setIcon('shockReady');
+      setLcd('DESCARGA ACONSEJADA.\nPulse el botón naranja intermitente.');
+      state.shockReady = true;
+      shockBtn.disabled = false;
+      shockBtn.classList.add('ready');
+      speak('Pulse el botón naranja intermitente para administrar la descarga.');
+      updateLiveState();
+      state.shockTimeout = setTimeout(()=>{
+        if(!isCurrent(myRun) || !state.shockReady) return;
+        state.shockReady = false;
+        shockBtn.disabled = true;
+        shockBtn.classList.remove('ready');
+        setLed(null);
+        logEvent('Descarga no administrada en 10 s tras la carga. Se omite y se reanuda la RCP.');
+        startCPR(myRun);
+      }, 10000);
+    });
+  } else {
+    setLed(null);
+    setIcon('noShock');
+    announce(
+      'Descarga no aconsejada.\nInicie la RCP inmediatamente.',
+      'Descarga no aconsejada. Inicie la reanimación cardiopulmonar inmediatamente. Comprima el pecho siguiendo el ritmo.',
+      ()=>startCPR(myRun)
+    );
+  }
+}
+function deliverShock(){
+  if(!state.power || !state.shockReady) return;
+  clearTimeout(state.shockTimeout); state.shockTimeout=null;
+  state.shockReady = false;
+  shockBtn.disabled = true;
+  shockBtn.classList.remove('ready');
+  const energy = energyForShock();
+  state.shockCount++;
+  shockSound();
+  setIcon('shockDelivered');
+  logEvent('Descarga administrada ('+energy+' J).');
+  setLcd('Descarga administrada ('+energy+' J).\nIniciando la RCP.');
+  setLed(null);
+  const myRun = state.runId;
+  speak('Descarga administrada. Inicie la reanimación cardiopulmonar inmediatamente.', ()=>startCPR(myRun));
+  updateLiveState();
+}
+function performVentilationPause(myRun){
+  if(!isCurrent(myRun)) return;
+  stopMetronome();
+  state.cprAlertPhase=false;
+  setIcon('ventilate');
+  setLcd('PARE Y VENTILE.\nDé dos ventilaciones.','Ventile acompañando cada uno de los dos tonos largos');
+  speak('Administre dos ventilaciones al paciente.', ()=>{
+    if(!isCurrent(myRun)) return;
+    longVentBeep();
+    const t1 = setTimeout(()=>{ if(isCurrent(myRun)) longVentBeep(); }, 1500);
+    const t2 = setTimeout(()=>{
+      if(!isCurrent(myRun)) return;
+      if(!state.cprInterval || state.cprSecondsLeft<=0) return; // la RCP ya ha terminado mientras se ventilaba
+      setIcon('compress');
+      setLcd('RCP EN CURSO\nComprima el pecho al ritmo del metrónomo.','100-120 compresiones por minuto · 30:2 si hay dos reanimadores');
+      speak('Continúe con las compresiones.');
+      startMetronome(myRun);
+    }, 3050);
+    state.ventTimers.push(t1,t2);
+  });
+}
+function finishCprAndAnalyze(myRun){
+  if(!isCurrent(myRun)) return;
+  state.analysisPending = false;
+  state.cprActive = false;
+  state.cprAlertPhase = false;
+  clearVentTimers();
+  stopMetronome();
+  cprTimerEl.classList.remove('show');
+  state.cycleIndex++;
+  speak('Deje de comprimir. Analizando el ritmo cardiaco.', ()=>startAnalysis(myRun));
+}
+function startCPR(myRun){
+  if(!isCurrent(myRun)) return;
+  setLed('ok',true);
+  setIcon('compress');
+  state.currentRhythm='ARTEFACTO';
+  state.cprTotal = state.settings.cprDuration;
+  state.cprSecondsLeft = state.cprTotal;
+  state.analysisPending = false;
+  state.cprActive = true;
+  cprTimerEl.classList.add('show');
+  updateCprDisplay();
+  setLcd('RCP EN CURSO\nComprima el pecho al ritmo del metrónomo.','100-120 compresiones por minuto · 30:2 si hay dos reanimadores');
+  state.cprAlertPhase=false;
+  state.cprBeatNum=0;
+  // El temporizador de 1s solo controla la duración real total de la RCP (visible en pantalla);
+  // el ritmo exacto de tonos 30:2 lo gestiona el secuenciador del metrónomo (startMetronome/playCprBeat).
+  // Si el tiempo se agota en mitad de un tramo de compresiones, se espera a completar las 30
+  // compresiones en curso (ver playCprBeat) antes de pasar al análisis de ritmo.
+  state.cprInterval = setInterval(()=>{
+    if(!isCurrent(myRun)){ clearInterval(state.cprInterval); return; }
+    if(state.paused) return;
+    state.cprSecondsLeft--;
+    updateCprDisplay();
+    if(state.cprSecondsLeft<=0){
+      clearInterval(state.cprInterval);
+      state.cprInterval=null;
+      if(state.cprBeatNum>0 && state.cprBeatNum<CPR_CYCLE_BEATS){
+        state.analysisPending = true;
+        logEvent('Tiempo de RCP agotado; se espera a completar las 30 compresiones en curso antes de analizar.');
+        return;
+      }
+      finishCprAndAnalyze(myRun);
+    }
+  },1000);
+  startMetronome(myRun);
+  updateLiveState();
+}
+function updateCprDisplay(){
+  const m = Math.floor(state.cprSecondsLeft/60);
+  const s = state.cprSecondsLeft%60;
+  cprTimerEl.textContent = 'RCP · '+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+
+function powerOff(){
+  if(!state.power) return;
+  clearTimeout(powerHoldTimeout); powerHoldTimeout=null;
+  powerBtn.classList.remove('holding');
+  logEvent('Dispositivo apagado.');
+  state.power=false;
+  state.runId++;
+  clearTimeout(state.analysisTimer);
+  clearInterval(state.analysisTickInterval);
+  clearInterval(state.cprInterval); state.cprInterval=null;
+  state.cprActive = false;
+  clearVentTimers();
+  stopMetronome();
+  stopBadContactAlarm();
+  try{ speechSynthesis.cancel(); }catch(e){}
+  state.awaitingPads=false;
+  state.padsOk=false;
+  state.padsEverConnected=false;
+  state.shockReady=false;
+  state.forcedNextRhythm=null;
+  state.currentScenario=null;
+  state.cycleIndex=0;
+  state.paused=false;
+  state.currentRhythm='FLAT';
+  setPadsAlarm(false);
+  cprTimerEl.classList.remove('show');
+  shockBtn.disabled=true;
+  shockBtn.classList.remove('ready');
+  setLed(null);
+  setIcon(null);
+  setLcd('DESA · pulse ENCENDIDO para iniciar','');
+  powerBtn.classList.remove('is-on');
+  powerLabel.textContent='ENCENDER';
+  offOverlay.classList.add('show');
+  updatePadConnector();
+  renderForceChips();
+  updateLiveState();
+}
+
+/* ============================================================
+   PAUSA
+   ============================================================ */
+function togglePause(){
+  if(!state.power) return;
+  state.paused = !state.paused;
+  $('#btnPause').textContent = state.paused ? 'Reanudar' : 'Pausar';
+  if(state.paused){
+    try{ speechSynthesis.pause(); }catch(e){}
+    stopMetronome();
+    logEvent('Simulación pausada por el instructor.');
+  } else {
+    try{ speechSynthesis.resume(); }catch(e){}
+    if(state.cprActive) startMetronome(state.runId);
+    logEvent('Simulación reanudada.');
+  }
+}
+
+/* ============================================================
+   MODO ADULTO / PEDIÁTRICO
+   ============================================================ */
+function setMode(mode){
+  if(state.mode===mode) return;
+  state.mode = mode;
+  modeThumb.classList.toggle('ped', mode==='PEDIATRICO');
+  btnAdult.classList.toggle('active', mode==='ADULTO');
+  btnPed.classList.toggle('active', mode==='PEDIATRICO');
+  lcdModePill.textContent = mode==='ADULTO' ? 'ADULTO' : 'PEDIÁTRICO';
+  logEvent('Modo cambiado a '+(mode==='ADULTO'?'adulto':'pediátrico')+'.');
+  if(state.power){
+    speak(mode==='ADULTO'
+      ? 'Modo adulto activado. Use electrodos de adulto.'
+      : 'Modo pediátrico activado. Use electrodos pediátricos si están disponibles.');
+  }
+  updateLiveState();
+}
+
+/* ============================================================
+   MENÚ — pestañas y controles
+   ============================================================ */
+function openMenu(){ menuOverlay.classList.add('show'); updateLiveState(); }
+function closeMenu(){ menuOverlay.classList.remove('show'); }
+
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab-pane').forEach(p=>{
+      p.style.display = (p.dataset.pane===tab) ? '' : 'none';
+    });
+  });
+});
+
+/* --- escenario --- */
+const scenarioSelect = $('#scenarioSelect');
+SCENARIOS.forEach(s=>{
+  const opt=document.createElement('option');
+  opt.value=s.id; opt.textContent=s.name;
+  scenarioSelect.appendChild(opt);
+});
+function updateScenarioDesc(){
+  const s = SCENARIOS.find(x=>x.id===scenarioSelect.value);
+  $('#scenarioDesc').textContent = s ? ('Secuencia: '+s.sequence.map(r=>RHYTHM_LABELS[r]).join(' → ')) : '';
+}
+scenarioSelect.addEventListener('change', updateScenarioDesc);
+updateScenarioDesc();
+
+document.querySelectorAll('[data-scenmode]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('[data-scenmode]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    state.scenarioMode = btn.dataset.scenmode;
+    $('#manualScenarioBlock').style.display = state.scenarioMode==='MANUAL' ? '' : 'none';
+    logEvent('Modo de escenario: '+state.scenarioMode.toLowerCase()+'.');
+  });
+});
+$('#btnApplyScenario').addEventListener('click',()=>{
+  state.manualScenarioId = scenarioSelect.value;
+  logEvent('Escenario manual seleccionado: '+SCENARIOS.find(s=>s.id===state.manualScenarioId).name+' (se aplicará al siguiente caso).');
+  closeMenu();
+});
+
+/* --- control en vivo --- */
+const forceRhythmRow = $('#forceRhythmRow');
+function renderForceChips(){
+  forceRhythmRow.innerHTML='';
+  Object.keys(RHYTHM_LABELS).forEach(r=>{
+    const chip=document.createElement('button');
+    chip.className='chip'+(state.forcedNextRhythm===r?' active':'');
+    chip.textContent=RHYTHM_LABELS[r];
+    chip.addEventListener('click',()=>{
+      state.forcedNextRhythm = (state.forcedNextRhythm===r) ? null : r;
+      renderForceChips();
+      updateLiveState();
+    });
+    forceRhythmRow.appendChild(chip);
+  });
+}
+renderForceChips();
+
+$('#btnPause').addEventListener('click', togglePause);
+$('#btnNewCase').addEventListener('click',()=>{
+  if(!state.power){ return; }
+  interruptCurrentActivity();
+  stopBadContactAlarm();
+  state.awaitingPads=false;
+  state.padsOk=true;
+  state.padsEverConnected=true;
+  setPadsAlarm(false);
+  updatePadConnector();
+  state.runId++;
+  const myRun = state.runId;
+  logEvent('El instructor ha forzado el inicio de un nuevo caso.');
+  closeMenu();
+  startNewCase(myRun);
+});
+$('#btnResetAll').addEventListener('click',()=>{
+  logEvent('Reinicio completo del dispositivo solicitado por el instructor.');
+  powerOff();
+  closeMenu();
+});
+
+/* --- ajustes --- */
+function wireChipGroup(selector, onPick){
+  document.querySelectorAll(selector).forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll(selector).forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      onPick(btn);
+    });
+  });
+}
+wireChipGroup('#cprDurationRow .chip', (btn)=>{ state.settings.cprDuration = parseInt(btn.dataset.cpr,10); });
+wireChipGroup('#analysisDurationRow .chip', (btn)=>{ state.settings.analysisDuration = parseInt(btn.dataset.an,10); });
+
+$('#volSlider').addEventListener('input',(e)=>{ state.settings.voiceVolume = parseFloat(e.target.value); });
+$('#rateSlider').addEventListener('input',(e)=>{ state.settings.speechRate = parseFloat(e.target.value); });
+$('#btnVoiceOn').addEventListener('click',()=>{ state.settings.voiceEnabled=true; $('#btnVoiceOn').classList.add('active'); $('#btnVoiceOff').classList.remove('active'); });
+$('#btnVoiceOff').addEventListener('click',()=>{ state.settings.voiceEnabled=false; $('#btnVoiceOff').classList.add('active'); $('#btnVoiceOn').classList.remove('active'); try{speechSynthesis.cancel();}catch(e){} });
+$('#btnMetroOn').addEventListener('click',()=>{ state.settings.metronomeEnabled=true; $('#btnMetroOn').classList.add('active'); $('#btnMetroOff').classList.remove('active'); });
+$('#btnMetroOff').addEventListener('click',()=>{ state.settings.metronomeEnabled=false; $('#btnMetroOff').classList.add('active'); $('#btnMetroOn').classList.remove('active'); });
+$('#btnEkgOn').addEventListener('click',()=>{ state.settings.ekgVisible=true; $('#btnEkgOn').classList.add('active'); $('#btnEkgOff').classList.remove('active'); });
+$('#btnEkgOff').addEventListener('click',()=>{ state.settings.ekgVisible=false; $('#btnEkgOff').classList.add('active'); $('#btnEkgOn').classList.remove('active'); });
+
+/* --- registro --- */
+$('#btnClearLog').addEventListener('click',()=>{ state.log=[]; renderLog(); });
+
+/* ============================================================
+   LISTENERS PRINCIPALES
+   ============================================================ */
+/* Encender: un toque basta. Apagar: hay que mantener pulsado 3 s (con anillo de progreso). */
+let powerHoldTimeout = null;
+function beginPowerPress(e){
+  if(e && typeof e.button==='number' && e.button!==0) return;
+  if(!state.power){ powerOn(); return; }
+  clearTimeout(powerHoldTimeout);
+  powerBtn.classList.add('holding');
+  powerHoldTimeout = setTimeout(()=>{
+    powerBtn.classList.remove('holding');
+    powerOff();
+  }, 3000);
+}
+function cancelPowerPress(){
+  clearTimeout(powerHoldTimeout);
+  powerHoldTimeout = null;
+  powerBtn.classList.remove('holding');
+}
+powerBtn.addEventListener('pointerdown', beginPowerPress);
+powerBtn.addEventListener('pointerup', cancelPowerPress);
+powerBtn.addEventListener('pointerleave', cancelPowerPress);
+powerBtn.addEventListener('pointercancel', cancelPowerPress);
+shockBtn.addEventListener('click', deliverShock);
+btnPadConnector.addEventListener('click', handlePadConnector);
+$('#btnMenu').addEventListener('click', openMenu);
+$('#closeMenu').addEventListener('click', closeMenu);
+menuOverlay.addEventListener('click',(e)=>{ if(e.target===menuOverlay) closeMenu(); });
+btnAdult.addEventListener('click',()=>setMode('ADULTO'));
+btnPed.addEventListener('click',()=>setMode('PEDIATRICO'));
+
+/* evitar zoom por doble tap / gestos en tablet */
+document.addEventListener('dblclick',(e)=>e.preventDefault());
+document.addEventListener('gesturestart',(e)=>e.preventDefault());
+document.addEventListener('contextmenu',(e)=>e.preventDefault());
+
+/* estado inicial */
+offOverlay.classList.add('show');
+setLcd('DESA · pulse ENCENDIDO para iniciar','');
+renderLog();
+updateLiveState();
+updatePadConnector();
+
+})();
+</script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
